@@ -1,5 +1,5 @@
-FROM ubuntu:noble
-MAINTAINER Odoo S.A. <info@odoo.com>
+FROM ubuntu:24.04
+MAINTAINER Otheus Shelling <shelling@bmg.gv.at>
 
 SHELL ["/bin/bash", "-xo", "pipefail", "-c"]
 
@@ -78,16 +78,73 @@ RUN curl -o odoo.deb -sSL http://nightly.odoo.com/${ODOO_VERSION}/nightly/deb/od
     && apt-get update \
     && apt-get -y install --no-install-recommends ./odoo.deb \
     && rm -rf /var/lib/apt/lists/* odoo.deb
+## ^-- anti-pattern: download and then extract in same image.
 
 # Copy entrypoint script and Odoo configuration file
 COPY ./entrypoint.sh /
 COPY ./odoo.conf /etc/odoo/
 
 # Set permissions and Mount /var/lib/odoo to allow restoring filestore and /mnt/extra-addons for users addons
-RUN chown odoo /etc/odoo/odoo.conf \
+RUN chown odoo /etc/odoo/odoo.conf 
+
+# This should be on a separate line for organizational purposes
+RUN true \
     && mkdir -p /mnt/extra-addons \
     && chown -R odoo /mnt/extra-addons
+
+# This should be moved up above with other installs. placed here for commit-diff reasons
+RUN set -e ;\
+    apt-get update ;\
+    apt-get -y install --no-install-recommends unzip
+
+## Custom extensions needed for BMG project
+## these must be installed BEFORE the volume directive -- 
+## From the dockerfile documentation:
+###  Changing the volume from within the Dockerfile: 
+###  If any build steps change the data within the volume after it has been declared, 
+###  those changes will be DISCARDED when using the legacy builder. 
+###  When using Buildkit, the changes will instead be kept.
+## Normally we use buildkit, but sometimes legacy builder is better ... for reasons.- O.S. 
+##
+
+## !! the URL for this is somehow anti-bot walled or something. 
+##    unclear how to pull it without using a real browser. 
+## temporary solution: copy from Dockerfile dir
+ADD rest_api_odoo-18.0.1.0.1.zip /tmp/rest_api_odoo.zip
+# ADD "https://apps.odoo.com/apps/modules/18.0/rest_api_odoo" /tmp
+#  or curl ... ;\curl -SL --connect-timeout 10 -o /tmp/rest_api_odoo.zip \
+
+RUN set -e ;\
+    cd /mnt/extra-addons ;\
+    umask 0022 ;\
+    unzip /tmp/rest_api_odoo.zip ;\
+    true
+
+## Locally developed plugin by DDx
+ADD gd_at-17e7981c.zip /tmp/gd_at.zip
+RUN set -e ;\
+    cd /mnt/extra-addons ;\
+    umask 0022 ;\
+    unzip /tmp/gd_at.zip ;\
+    true
+
+# Needed for Special modules
+RUN tee -a /etc/odoo/odoo.conf <<-EOF
+	server_wide_modules = web, base, rest_api_odoo
+	EOF
+
+## Update odoo.conf file for this environment:
+RUN tee -a /etc/odoo/odoo.conf <<-EOF
+	db_host = pgdb
+	db_user = dap
+	db_password = 7WZliwFpJ4OWBH
+	db_name = dap
+	EOF
+
 VOLUME ["/var/lib/odoo", "/mnt/extra-addons"]
+
+## ?^?^ Why does /var/lib/odoo need persistence in this case? Cache? Dynamic files State files? Not good. 
+## Why does /mnt/extra-addons get a separate volume? Dynamic installs perhaps?
 
 # Expose Odoo services
 EXPOSE 8069 8071 8072
