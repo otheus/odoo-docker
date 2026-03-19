@@ -133,14 +133,6 @@ RUN tee -a /etc/odoo/odoo.conf <<-EOF
 	server_wide_modules = web, base, rest_api_odoo
 	EOF
 
-## Update odoo.conf file for this environment:
-RUN tee -a /etc/odoo/odoo.conf <<-EOF
-	db_host = pgdb
-	db_user = dap
-	db_password = 7WZliwFpJ4OWBH
-	db_name = dap
-	EOF
-
 VOLUME ["/var/lib/odoo", "/mnt/extra-addons"]
 
 ## ?^?^ Why does /var/lib/odoo need persistence in this case? Cache? Dynamic files State files? Not good. 
