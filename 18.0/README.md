@@ -67,17 +67,36 @@
 
 12. Create a new container in the background using the newly built image
 
+    **update** the following *does not* work!
+
         docker run -d --name odoo --network odoo-net -p 8069:8069 \
           -e HOST=pgdb -e USER=dap -e PASSWORD=$PGDBPASS "$IMGNAME" -- \
           -i base -u all 
 
-    [!WARNING]: This method is insecure: the password is exposed to other processes on the same host
+    [!WARNING]: This method does not work! (and it is insecure)
+    Somehow, specifying these argument ends up causing odoo to run without doing
+    the proper initializations. 
+
+    It's also insecure: the password is exposed to other processes on the same host
     (same pid-namespace or host's pid-namespace). `env_file` must be used. Inluding passwords within 
     a container is also considered dangerous, without the use of a "vault" mapping. 
 
     The additional options (`-i base -u all` are needed at least on **THE FIRST RUN** 
-    in order to initialize the database and modules. <I think!?!>
+    in order to initialize the database and modules. 
 
+    **Correct way**
+
+    1. Update odoo.conf with the database connection info. 
+       This means the password is also in the container, which is also undesirable. 
+       However, with the "trust" method, it is at least not an issue for locally kept images.
+
+    2. Run it simply as:
+    
+        docker run -d --name odoo --network odoo-net -p 8069:8069 \
+          "$IMGNAME" -- \
+          -i base -u all 
+
+    
 13. Connect to the service on via the browser localhost:8069, use "admin" and "admin" for the username and password.
 
 
@@ -114,27 +133,15 @@
 
         # Needed for Special modules
         RUN tee -a /etc/odoo/odoo.conf <<-EOF
-                server_wide_modules = web, base, rest_api_odoo
-                EOF
+        <tab-chr>server_wide_modules = web, base, rest_api_odoo
+        <tab-chr>EOF
+
+6. Update the Dockerfile *or* the odoo.cnf with the db_host parameters:
+
+        tee -a odoo.conf << EOF
+        db_host = pgdb
+        db_user = dap
+        db_password = $PGDBPASS
+        EOF
 
 
-### Errors after ativation of GD:
-
-This appears in a pop-up window after hitting the "Activate" button:
-
-```
-Traceback (most recent call last):
-File "/usr/lib/python3/dist-packages/odoo/modules/loading.py", line 90, in load_demo load_data(env(su=True), idref, mode, kind='demo', package=package)
-File "/usr/lib/python3/dist-packages/odoo/modules/loading.py", line 72, in load_data tools.convert_file(env, package.name, filename, idref, mode, noupdate, kind)
-File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 662, in convert_file convert_xml_import(env, module, fp, idref, mode, noupdate)
-File "/usr/lib/python3/dist-packages/odoo/tools/convert.py", line 712, in convert_xml_import doc = etree.parse(xmlfile) ^^^^^^^^^^^^^^^^^^^^
-File "src/lxml/etree.pyx", line 3570, in lxml.etree.parse
-File "src/lxml/parser.pxi", line 1973, in lxml.etree._parseDocument
-File "src/lxml/parser.pxi", line 1993, in lxml.etree._parseFilelikeDocument
-File "src/lxml/parser.pxi", line 1887, in lxml.etree._parseDocFromFilelike
-File "src/lxml/parser.pxi", line 1224, in lxml.etree._BaseParser._parseDocFromFilelike
-File "src/lxml/parser.pxi", line 633, in lxml.etree._ParserContext._handleParseResultDoc
-File "src/lxml/parser.pxi", line 743, in lxml.etree._handleParseResult
-File "src/lxml/parser.pxi", line 672, in lxml.etree._raiseParseError
-File "/mnt/extra-addons/gd_at/demo/demo.xml", line 2 lxml.etree.XMLSyntaxError: Start tag expected, '<' not found, line 2, column 1
-```
