@@ -1,29 +1,54 @@
 flowchart TD
-Start([Start]) --> Check-if-First-Run[Set is-first-run]
+Start([Start]) --> Check-if-First-Run[Determine if previously run]:::Start
 
-FirstRunInit -->|Yes| Initialize[Initialize the environment]
-Initialize --> PourConfig[Pour the configuration]
+Check-if-First-Run --> ParseEnvironment[Parse Environment inherited through container-process]
 
-Check-if-First-Run --> ParseEnvironment[Environment inherited through Container process]
+ParseEnvironment --> ParseCommandLine[Parse CLI-arguments to container-process]
 
-ParseEnvironment --> ParseCommandLine[Arguments to Container process]
+ParseCommandLine  --> ParseODOO_RC[Parse <tt>$ODOO_RC</tt> file for database configuration]
 
-ParseCommandLine  -> ParseODOO_RC[Process $ODOO_RC file]
+ParseODOO_RC --> MergeConfigurations["Merge parameters from RC-file, Environment, CLI-arguments (cascading priority)"]
 
-ParseODOO_RC --> MergeConfigurations[Merge RC-file,Environment,Arguments in that order]
+MergeConfigurations --> CheckDatabaseOnline{Is Database Reachable?}
 
-MergeConfigurations --> CheckDatabase[
-Parseenvironment Process Container Env Variables]
+DatabaseTimeoutReached -->|Yes| Abort_DB_Timeout([ DB unreachable ]):::Abort
 
-PourConfig --> CheckDBAccess[Check access to the database]
-CheckDBAccess --> CheckDBEmpty[Check if the database is empty]
-CheckDBEmpty --> DynConfig[Create a dynamic<br>runtime configuration]
+DatabaseTimeoutReached -->|No| DatabaseWait((Wait 1s))
 
-DynConfig --> WasFirst{Was this the first run?}
-WasFirst -->|Yes| CreateFile[Create essential<br>initialization file]
-CreateFile --> RunInstance[Run the instance]
+CheckDatabaseOnline -->|No| DatabaseTimeoutReached{Timeout reached?}
 
-WasFirst -->|No| RunInstance[Run the instance]
+DatabaseWait --> CheckDatabaseOnline
 
-RunInstance --> End([End])
+CheckDatabaseOnline --->|Yes| CheckDatabaseCredentials{Can logon as DB User?}
+
+CheckDatabaseCredentials -->|OK| IsFirstRun{First Run?}
+
+CheckDatabaseCredentials -->|fail| Abort_DB_Credentials([ Invalid <br/>DB Credentials ]):::Abort
+
+IsFirstRun -->|Yes| 1R_CheckDatabaseExists{Does DB-name exist?}
+
+1R_CheckDatabaseExists -->|Yes| Abort_FirstRun_and_DB_exists([DB should not exist<br/>on first run!]):::Abort
+
+1R_CheckDatabaseExists -->|No| 1R_CreateFile[Create 'first-run' guard-file]
+
+1R_CreateFile --> DynConfig[Create the dynamic<br>runtime configuration]
+
+DynConfig --> LaunchInstance[Start Odoo]
+
+IsFirstRun -->|No| 2R_CheckDatabaseExists{Does DB-name exist?}
+
+2R_CheckDatabaseExists -->|Yes| CheckDBEmpty{Check if the database<br/>is empty}
+
+2R_CheckDatabaseExists -->|No| Abort_not_FirstRun_and_DB_not_exists([DB should exist<br/>on subsequent runs!]):::Abort
+
+CheckDBEmpty -->|Yes| Abort_not_FirstRun_and_DB_is_empty([DB must not exist<br/>and be empty]):::Abort
+
+CheckDBEmpty -->|No| DynConfig
+
+LaunchInstance --> End([End])
+
+style End fill:#BBB
+
+classDef Abort fill:darkred,color:white
+classDef Start fill:darkgreen,color:white
 
