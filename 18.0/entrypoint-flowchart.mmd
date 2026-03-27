@@ -1,0 +1,29 @@
+flowchart TD
+Start([Start]) --> Check-if-First-Run[Set is-first-run]
+
+FirstRunInit -->|Yes| Initialize[Initialize the environment]
+Initialize --> PourConfig[Pour the configuration]
+
+Check-if-First-Run --> ParseEnvironment[Environment inherited through Container process]
+
+ParseEnvironment --> ParseCommandLine[Arguments to Container process]
+
+ParseCommandLine  -> ParseODOO_RC[Process $ODOO_RC file]
+
+ParseODOO_RC --> MergeConfigurations[Merge RC-file,Environment,Arguments in that order]
+
+MergeConfigurations --> CheckDatabase[
+Parseenvironment Process Container Env Variables]
+
+PourConfig --> CheckDBAccess[Check access to the database]
+CheckDBAccess --> CheckDBEmpty[Check if the database is empty]
+CheckDBEmpty --> DynConfig[Create a dynamic<br>runtime configuration]
+
+DynConfig --> WasFirst{Was this the first run?}
+WasFirst -->|Yes| CreateFile[Create essential<br>initialization file]
+CreateFile --> RunInstance[Run the instance]
+
+WasFirst -->|No| RunInstance[Run the instance]
+
+RunInstance --> End([End])
+
